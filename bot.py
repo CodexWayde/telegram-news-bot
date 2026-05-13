@@ -1,10 +1,12 @@
 import os
 import logging
 import requests
+import pytz
 from datetime import datetime
 
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.environ["BOT_TOKEN"]
@@ -63,7 +65,9 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "👋 *Welcome to NewsBot!*\n\n"
         "Commands:\n"
         "/news — top headlines right now\n"
-        "/search <keyword> — search by topic",
+        "/search <keyword> — search by topic\n"
+        "/postnews — post news to the group\n\n"
+        "📅 News is also posted automatically at 7AM, 12PM, 6PM and 10PM (WAT).",
         parse_mode="Markdown",
     )
 
@@ -126,6 +130,72 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("❌ Search failed. Try again later.")
 
 
+async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    CHAT_ID = os.environ["CHAT_ID"]
+    await update.message.reply_text("📤 Posting news to the group…")
+    try:
+        articles = fetch_top_headlines()
+        formatted = format_articles(articles)
+        if not formatted:
+            await update.message.reply_text("😕 No articles found.")
+            return
+        for a in formatted:
+            caption = (
+                f"📰 *{a['title']}*\n"
+                f"_{a['description']}_\n\n"
+                f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})"
+            )
+            if a["image"]:
+                await ctx.bot.send_photo(
+                    chat_id=CHAT_ID,
+                    photo=a["image"],
+                    caption=caption,
+                    parse_mode="Markdown",
+                )
+            else:
+                await ctx.bot.send_message(
+                    chat_id=CHAT_ID,
+                    text=caption,
+                    parse_mode="Markdown",
+                    disable_web_page_preview=False,
+                )
+    except Exception as e:
+        logger.error(f"Error posting news: {e}")
+        await update.message.reply_text("❌ Failed to post news. Try again later.")
+
+
+async def scheduled_news(bot) -> None:
+    CHAT_ID = os.environ["CHAT_ID"]
+    try:
+        articles = fetch_top_headlines()
+        formatted = format_articles(articles)
+        if not formatted:
+            return
+        await bot.send_message(chat_id=CHAT_ID, text="🗞 *News Update!*", parse_mode="Markdown")
+        for a in formatted:
+            caption = (
+                f"📰 *{a['title']}*\n"
+                f"_{a['description']}_\n\n"
+                f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})"
+            )
+            if a["image"]:
+                await bot.send_photo(
+                    chat_id=CHAT_ID,
+                    photo=a["image"],
+                    caption=caption,
+                    parse_mode="Markdown",
+                )
+            else:
+                await bot.send_message(
+                    chat_id=CHAT_ID,
+                    text=caption,
+                    parse_mode="Markdown",
+                    disable_web_page_preview=False,
+                )
+    except Exception as e:
+        logger.error(f"Scheduled news error: {e}")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -133,7 +203,18 @@ def main() -> None:
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("news", cmd_news))
     app.add_handler(CommandHandler("search", cmd_search))
-    logger.info("Bot is running…")
+    app.add_handler(CommandHandler("postnews", cmd_postnews))
+
+    # Scheduler
+    tz = pytz.timezone("Africa/Lagos")
+    scheduler = AsyncIOScheduler(timezone=tz)
+    scheduler.add_job(scheduled_news, "cron", hour=7, minute=0, args=[app.bot])
+    scheduler.add_job(scheduled_news, "cron", hour=12, minute=0, args=[app.bot])
+    scheduler.add_job(scheduled_news, "cron", hour=18, minute=0, args=[app.bot])
+    scheduler.add_job(scheduled_news, "cron", hour=22, minute=0, args=[app.bot])
+    scheduler.start()
+
+    logger.info("Bot is running with scheduler…")
     app.run_polling()
 
 

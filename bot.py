@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # ── NewsAPI helpers ───────────────────────────────────────────────────────────
 
-def fetch_top_headlines(page_size: int = 5) -> list[dict]:
+def fetch_top_headlines(page_size: int = 7) -> list[dict]:
     resp = requests.get(
         f"{NEWS_API_URL}/top-headlines",
         params={"language": "en", "pageSize": page_size, "apiKey": NEWS_API_KEY},

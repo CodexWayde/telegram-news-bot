@@ -145,20 +145,25 @@ async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
                 f"_{a['description']}_\n\n"
                 f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})"
             )
-            if a["image"]:
-                await ctx.bot.send_photo(
-                    chat_id=CHAT_ID,
-                    photo=a["image"],
-                    caption=caption,
-                    parse_mode="Markdown",
-                )
-            else:
-                await ctx.bot.send_message(
-                    chat_id=CHAT_ID,
-                    text=caption,
-                    parse_mode="Markdown",
-                    disable_web_page_preview=False,
-                )
+            try:
+                if a["image"]:
+                    await ctx.bot.send_photo(
+                        chat_id=CHAT_ID,
+                        photo=a["image"],
+                        caption=caption,
+                        parse_mode="Markdown",
+                    )
+                else:
+                    await ctx.bot.send_message(
+                        chat_id=CHAT_ID,
+                        text=caption,
+                        parse_mode="Markdown",
+                        disable_web_page_preview=False,
+                    )
+            except Exception as e:
+                logger.error(f"Error sending article: {e}")
+                continue
+        await update.message.reply_text("✅ News posted to the group successfully!")
     except Exception as e:
         logger.error(f"Error posting news: {e}")
         await update.message.reply_text("❌ Failed to post news. Try again later.")

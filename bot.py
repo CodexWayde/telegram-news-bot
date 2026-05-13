@@ -16,9 +16,23 @@ NEWS_API_URL = "https://newsapi.org/v2"
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ── Greeting helper ───────────────────────────────────────────────────────────
+
+def get_greeting() -> str:
+    hour = datetime.now(pytz.utc).hour
+    if 5 <= hour < 12:
+        return "🌅 Good Morning"
+    elif 12 <= hour < 17:
+        return "☀️ Good Afternoon"
+    elif 17 <= hour < 21:
+        return "🌆 Good Evening"
+    else:
+        return "🌙 Good Night"
+
+
 # ── NewsAPI helpers ───────────────────────────────────────────────────────────
 
-def fetch_top_headlines(page_size: int = 7) -> list[dict]:
+def fetch_top_headlines(page_size: int = 4) -> list[dict]:
     resp = requests.get(
         f"{NEWS_API_URL}/top-headlines",
         params={"language": "en", "pageSize": page_size, "apiKey": NEWS_API_KEY},
@@ -28,10 +42,32 @@ def fetch_top_headlines(page_size: int = 7) -> list[dict]:
     return resp.json().get("articles", [])
 
 
+def fetch_tech_news(page_size: int = 4) -> list[dict]:
+    resp = requests.get(
+        f"{NEWS_API_URL}/everything",
+        params={
+            "q": "technology OR artificial intelligence OR startups OR crypto OR gadgets",
+            "pageSize": page_size,
+            "sortBy": "publishedAt",
+            "language": "en",
+            "apiKey": NEWS_API_KEY,
+        },
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json().get("articles", [])
+
+
 def fetch_search(query: str, page_size: int = 5) -> list[dict]:
     resp = requests.get(
         f"{NEWS_API_URL}/everything",
-        params={"q": query, "pageSize": page_size, "sortBy": "publishedAt", "apiKey": NEWS_API_KEY},
+        params={
+            "q": query,
+            "pageSize": page_size,
+            "sortBy": "publishedAt",
+            "language": "en",
+            "apiKey": NEWS_API_KEY,
+        },
         timeout=10,
     )
     resp.raise_for_status()
@@ -58,45 +94,75 @@ def format_articles(articles: list[dict]) -> list[dict]:
     return results
 
 
-# ── Handlers ──────────────────────────────────────────────────────────────────
-
-async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text(
-        "👋 *Welcome to NewsBot!*\n\n"
-        "Commands:\n"
-        "/news — top headlines right now\n"
-        "/search <keyword> — search by topic\n"
-        "/postnews — post news to the group\n\n"
-        "📅 News is also posted automatically at 7AM, 12PM, 6PM and 10PM (WAT).",
-        parse_mode="Markdown",
-    )
-
-
-async def cmd_news(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text("⏳ Fetching top headlines…")
-    try:
-        articles = fetch_top_headlines()
-        formatted = format_articles(articles)
-        if not formatted:
-            await update.message.reply_text("😕 No articles found.")
-            return
-        for a in formatted:
-            caption = (
-                f"📰 *{a['title']}*\n"
-                f"_{a['description']}_\n\n"
-                f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})"
-            )
+async def send_articles(bot, chat_id, articles: list[dict]) -> None:
+    for a in articles:
+        caption = (
+            f"📰 *{a['title']}*\n"
+            f"_{a['description']}_\n\n"
+            f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})\n\n"
+            f"━━━━━━━━━━━━━━━━\n"
+            f"📡 *THE GLOBAL NEXUS* — Your World. Your Tech."
+        )
+        try:
             if a["image"]:
-                await update.message.reply_photo(
+                await bot.send_photo(
+                    chat_id=chat_id,
                     photo=a["image"],
                     caption=caption,
                     parse_mode="Markdown",
                 )
             else:
-                await update.message.reply_text(caption, parse_mode="Markdown", disable_web_page_preview=False)
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=caption,
+                    parse_mode="Markdown",
+                    disable_web_page_preview=False,
+                )
+        except Exception as e:
+            logger.error(f"Error sending article: {e}")
+            continue
+
+
+# ── Handlers ──────────────────────────────────────────────────────────────────
+
+async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text(
+        "👋 *Welcome to THE GLOBAL NEXUS Bot!*\n\n"
+        "Your #1 source for global news and tech updates. 🌍💻\n\n"
+        "*Commands:*\n"
+        "/news — top global headlines\n"
+        "/tech — latest tech news\n"
+        "/search <keyword> — search any topic\n"
+        "/postnews — post news to the group\n\n"
+        "📅 News drops automatically at 6AM, 12PM, 6PM & 10PM (UTC).",
+        parse_mode="Markdown",
+    )
+
+
+async def cmd_news(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("⏳ Fetching top global headlines…")
+    try:
+        articles = format_articles(fetch_top_headlines())
+        if not articles:
+            await update.message.reply_text("😕 No articles found.")
+            return
+        await send_articles(ctx.bot, update.effective_chat.id, articles)
     except Exception as e:
         logger.error(f"Error fetching news: {e}")
         await update.message.reply_text("❌ Failed to fetch news. Try again later.")
+
+
+async def cmd_tech(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
+    await update.message.reply_text("💻 Fetching latest tech news…")
+    try:
+        articles = format_articles(fetch_tech_news())
+        if not articles:
+            await update.message.reply_text("😕 No tech articles found.")
+            return
+        await send_articles(ctx.bot, update.effective_chat.id, articles)
+    except Exception as e:
+        logger.error(f"Error fetching tech news: {e}")
+        await update.message.reply_text("❌ Failed to fetch tech news. Try again later.")
 
 
 async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
@@ -106,25 +172,11 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     query = " ".join(ctx.args)
     await update.message.reply_text(f"🔍 Searching for *{query}*…", parse_mode="Markdown")
     try:
-        articles = fetch_search(query)
-        formatted = format_articles(articles)
-        if not formatted:
+        articles = format_articles(fetch_search(query))
+        if not articles:
             await update.message.reply_text("😕 No articles found.")
             return
-        for a in formatted:
-            caption = (
-                f"📰 *{a['title']}*\n"
-                f"_{a['description']}_\n\n"
-                f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})"
-            )
-            if a["image"]:
-                await update.message.reply_photo(
-                    photo=a["image"],
-                    caption=caption,
-                    parse_mode="Markdown",
-                )
-            else:
-                await update.message.reply_text(caption, parse_mode="Markdown", disable_web_page_preview=False)
+        await send_articles(ctx.bot, update.effective_chat.id, articles)
     except Exception as e:
         logger.error(f"Search error: {e}")
         await update.message.reply_text("❌ Search failed. Try again later.")
@@ -132,38 +184,23 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     CHAT_ID = os.environ["CHAT_ID"]
-    await update.message.reply_text("📤 Posting news to the group…")
+    await update.message.reply_text("📤 Posting news to The Global Nexus…")
     try:
-        articles = fetch_top_headlines()
-        formatted = format_articles(articles)
-        if not formatted:
-            await update.message.reply_text("😕 No articles found.")
-            return
-        for a in formatted:
-            caption = (
-                f"📰 *{a['title']}*\n"
-                f"_{a['description']}_\n\n"
-                f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})"
-            )
-            try:
-                if a["image"]:
-                    await ctx.bot.send_photo(
-                        chat_id=CHAT_ID,
-                        photo=a["image"],
-                        caption=caption,
-                        parse_mode="Markdown",
-                    )
-                else:
-                    await ctx.bot.send_message(
-                        chat_id=CHAT_ID,
-                        text=caption,
-                        parse_mode="Markdown",
-                        disable_web_page_preview=False,
-                    )
-            except Exception as e:
-                logger.error(f"Error sending article: {e}")
-                continue
-        await update.message.reply_text("✅ News posted to the group successfully!")
+        global_articles = format_articles(fetch_top_headlines(4))
+        tech_articles = format_articles(fetch_tech_news(4))
+        greeting = get_greeting()
+        await ctx.bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"{greeting}, Nexus Fam! 🌍\n\n"
+                f"Here's your news update from *THE GLOBAL NEXUS* 📡\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🌐 *Global News* + 💻 *Tech Updates*"
+            ),
+            parse_mode="Markdown",
+        )
+        await send_articles(ctx.bot, CHAT_ID, global_articles + tech_articles)
+        await update.message.reply_text("✅ News posted to The Global Nexus successfully!")
     except Exception as e:
         logger.error(f"Error posting news: {e}")
         await update.message.reply_text("❌ Failed to post news. Try again later.")
@@ -172,31 +209,20 @@ async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def scheduled_news(bot) -> None:
     CHAT_ID = os.environ["CHAT_ID"]
     try:
-        articles = fetch_top_headlines()
-        formatted = format_articles(articles)
-        if not formatted:
-            return
-        await bot.send_message(chat_id=CHAT_ID, text="🗞 *News Update!*", parse_mode="Markdown")
-        for a in formatted:
-            caption = (
-                f"📰 *{a['title']}*\n"
-                f"_{a['description']}_\n\n"
-                f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})"
-            )
-            if a["image"]:
-                await bot.send_photo(
-                    chat_id=CHAT_ID,
-                    photo=a["image"],
-                    caption=caption,
-                    parse_mode="Markdown",
-                )
-            else:
-                await bot.send_message(
-                    chat_id=CHAT_ID,
-                    text=caption,
-                    parse_mode="Markdown",
-                    disable_web_page_preview=False,
-                )
+        global_articles = format_articles(fetch_top_headlines(4))
+        tech_articles = format_articles(fetch_tech_news(4))
+        greeting = get_greeting()
+        await bot.send_message(
+            chat_id=CHAT_ID,
+            text=(
+                f"{greeting}, Nexus Fam! 🌍\n\n"
+                f"Here's your news update from *THE GLOBAL NEXUS* 📡\n"
+                f"━━━━━━━━━━━━━━━━\n"
+                f"🌐 *Global News* + 💻 *Tech Updates*"
+            ),
+            parse_mode="Markdown",
+        )
+        await send_articles(bot, CHAT_ID, global_articles + tech_articles)
     except Exception as e:
         logger.error(f"Scheduled news error: {e}")
 
@@ -207,13 +233,13 @@ def main() -> None:
     app = ApplicationBuilder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("news", cmd_news))
+    app.add_handler(CommandHandler("tech", cmd_tech))
     app.add_handler(CommandHandler("search", cmd_search))
     app.add_handler(CommandHandler("postnews", cmd_postnews))
 
-    # Scheduler
-    tz = pytz.timezone("Africa/Lagos")
-    scheduler = AsyncIOScheduler(timezone=tz)
-    scheduler.add_job(scheduled_news, "cron", hour=7, minute=0, args=[app.bot])
+    # Scheduler — UTC time (works globally)
+    scheduler = AsyncIOScheduler(timezone=pytz.utc)
+    scheduler.add_job(scheduled_news, "cron", hour=6, minute=0, args=[app.bot])
     scheduler.add_job(scheduled_news, "cron", hour=12, minute=0, args=[app.bot])
     scheduler.add_job(scheduled_news, "cron", hour=18, minute=0, args=[app.bot])
     scheduler.add_job(scheduled_news, "cron", hour=22, minute=0, args=[app.bot])

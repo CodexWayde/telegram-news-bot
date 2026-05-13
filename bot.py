@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 def fetch_top_headlines(page_size: int = 5) -> list[dict]:
     resp = requests.get(
         f"{NEWS_API_URL}/top-headlines",
-        params={"country": "us", "pageSize": page_size, "apiKey": NEWS_API_KEY},
+        params={"language": "en", "pageSize": page_size, "apiKey": NEWS_API_KEY},
         timeout=10,
     )
     resp.raise_for_status()

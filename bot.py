@@ -36,16 +36,24 @@ def fetch_search(query: str, page_size: int = 5) -> list[dict]:
     return resp.json().get("articles", [])
 
 
-def format_articles(articles: list[dict]) -> str:
+def format_articles(articles: list[dict]) -> list[dict]:
     if not articles:
-        return "😕 No articles found."
-    lines = []
-    for i, a in enumerate(articles, 1):
+        return []
+    results = []
+    for a in articles:
         title = a.get("title") or "No title"
         url = a.get("url") or ""
         source = (a.get("source") or {}).get("name", "Unknown")
-        lines.append(f"{i}. *{title}*\n   📰 {source}\n   🔗 {url}")
-    return "\n\n".join(lines)
+        description = a.get("description") or ""
+        image = a.get("urlToImage") or ""
+        results.append({
+            "title": title,
+            "url": url,
+            "source": source,
+            "description": description,
+            "image": image,
+        })
+    return results
 
 
 # ── Handlers ──────────────────────────────────────────────────────────────────
@@ -64,11 +72,24 @@ async def cmd_news(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("⏳ Fetching top headlines…")
     try:
         articles = fetch_top_headlines()
-        text = (
-            f"📰 *Top Headlines* — {datetime.utcnow().strftime('%b %d, %H:%M UTC')}\n\n"
-            + format_articles(articles)
-        )
-        await update.message.reply_text(text, parse_mode="Markdown", disable_web_page_preview=True)
+        formatted = format_articles(articles)
+        if not formatted:
+            await update.message.reply_text("😕 No articles found.")
+            return
+        for a in formatted:
+            caption = (
+                f"📰 *{a['title']}*\n"
+                f"_{a['description']}_\n\n"
+                f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})"
+            )
+            if a["image"]:
+                await update.message.reply_photo(
+                    photo=a["image"],
+                    caption=caption,
+                    parse_mode="Markdown",
+                )
+            else:
+                await update.message.reply_text(caption, parse_mode="Markdown", disable_web_page_preview=False)
     except Exception as e:
         logger.error(f"Error fetching news: {e}")
         await update.message.reply_text("❌ Failed to fetch news. Try again later.")
@@ -82,8 +103,24 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text(f"🔍 Searching for *{query}*…", parse_mode="Markdown")
     try:
         articles = fetch_search(query)
-        text = f"🔍 *Results for '{query}'*\n\n" + format_articles(articles)
-        await update.message.reply_text(text, parse_mode="Markdown", disable_web_page_preview=True)
+        formatted = format_articles(articles)
+        if not formatted:
+            await update.message.reply_text("😕 No articles found.")
+            return
+        for a in formatted:
+            caption = (
+                f"📰 *{a['title']}*\n"
+                f"_{a['description']}_\n\n"
+                f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})"
+            )
+            if a["image"]:
+                await update.message.reply_photo(
+                    photo=a["image"],
+                    caption=caption,
+                    parse_mode="Markdown",
+                )
+            else:
+                await update.message.reply_text(caption, parse_mode="Markdown", disable_web_page_preview=False)
     except Exception as e:
         logger.error(f"Search error: {e}")
         await update.message.reply_text("❌ Search failed. Try again later.")

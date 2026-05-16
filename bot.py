@@ -10,11 +10,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.environ["BOT_TOKEN"]
-NEWS_API_KEY = "db4858b5de9bfdfa000f06505d34df10"
-NEWS_API_URL = "https://gnews.io/api/v4"
+CHAT_ID = os.environ["CHAT_ID"]
+GNEWS_API_KEY = "db4858b5de9bfdfa000f06505d34df10"
+GNEWS_API_URL = "https://gnews.io/api/v4"
 
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
+
 
 # ── Greeting helper ───────────────────────────────────────────────────────────
 
@@ -30,10 +32,7 @@ def get_greeting() -> str:
         return "🌙 Good Night"
 
 
-# ── NewsAPI helpers ───────────────────────────────────────────────────────────
-
-GNEWS_API_KEY = "db4858b5de9bfdfa000f06505d34df10"
-GNEWS_API_URL = "https://gnews.io/api/v4"
+# ── GNews helpers ─────────────────────────────────────────────────────────────
 
 def fetch_top_headlines(page_size: int = 4) -> list[dict]:
     resp = requests.get(
@@ -67,13 +66,13 @@ def fetch_tech_news(page_size: int = 4) -> list[dict]:
 
 def fetch_search(query: str, page_size: int = 5) -> list[dict]:
     resp = requests.get(
-        f"{NEWS_API_URL}/everything",
+        f"{GNEWS_API_URL}/search",
         params={
             "q": query,
-            "pageSize": page_size,
-            "sortBy": "publishedAt",
+            "max": page_size,
             "language": "en",
-            "apiKey": NEWS_API_KEY,
+            "sortby": "publishedAt",
+            "apikey": GNEWS_API_KEY,
         },
         timeout=10,
     )
@@ -88,10 +87,8 @@ def format_articles(articles: list[dict]) -> list[dict]:
     for a in articles:
         title = a.get("title") or "No title"
         url = a.get("url") or ""
-        # GNews uses "source" as a dict with "name", same as NewsAPI
         source = (a.get("source") or {}).get("name", "Unknown")
         description = a.get("description") or ""
-        # GNews uses "image" instead of "urlToImage"
         image = a.get("image") or a.get("urlToImage") or ""
         results.append({
             "title": title,
@@ -192,7 +189,6 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
-    CHAT_ID = os.environ["CHAT_ID"]
     await update.message.reply_text("📤 Posting news to The Global Nexus…")
     try:
         global_articles = format_articles(fetch_top_headlines(4))
@@ -216,7 +212,6 @@ async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def scheduled_news(bot) -> None:
-    CHAT_ID = os.environ["CHAT_ID"]
     try:
         global_articles = format_articles(fetch_top_headlines(4))
         tech_articles = format_articles(fetch_tech_news(4))
@@ -232,6 +227,7 @@ async def scheduled_news(bot) -> None:
             parse_mode="Markdown",
         )
         await send_articles(bot, CHAT_ID, global_articles + tech_articles)
+        logger.info("Scheduled news posted successfully!")
     except Exception as e:
         logger.error(f"Scheduled news error: {e}")
 

@@ -10,7 +10,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.environ["BOT_TOKEN"]
-NEWS_API_KEY = "db4858b5de9bfdfa000f06505d34df10"NEWS_API_URL = "https://gnews.io/api/v4"
+NEWS_API_KEY = "db4858b5de9bfdfa000f06505d34df10"
+NEWS_API_URL = "https://gnews.io/api/v4"
 
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -10,8 +10,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.environ["BOT_TOKEN"]
-NEWS_API_KEY = os.environ["NEWS_API_KEY"]
-NEWS_API_URL = "https://newsapi.org/v2"
+NEWS_API_KEY = os.environ["GNEWS_API_KEY"]
+NEWS_API_URL = "https://gnews.io/api/v4"
 
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,10 +32,17 @@ def get_greeting() -> str:
 
 # ── NewsAPI helpers ───────────────────────────────────────────────────────────
 
+GNEWS_API_KEY = "db4858b5de9bfdfa000f06505d34df10"
+GNEWS_API_URL = "https://gnews.io/api/v4"
+
 def fetch_top_headlines(page_size: int = 4) -> list[dict]:
     resp = requests.get(
-        f"{NEWS_API_URL}/top-headlines",
-        params={"language": "en", "pageSize": page_size, "apiKey": NEWS_API_KEY},
+        f"{GNEWS_API_URL}/top-headlines",
+        params={
+            "language": "en",
+            "max": page_size,
+            "apikey": GNEWS_API_KEY,
+        },
         timeout=10,
     )
     resp.raise_for_status()
@@ -44,13 +51,13 @@ def fetch_top_headlines(page_size: int = 4) -> list[dict]:
 
 def fetch_tech_news(page_size: int = 4) -> list[dict]:
     resp = requests.get(
-        f"{NEWS_API_URL}/everything",
+        f"{GNEWS_API_URL}/search",
         params={
             "q": "technology OR artificial intelligence OR startups OR crypto OR gadgets",
-            "pageSize": page_size,
-            "sortBy": "publishedAt",
+            "max": page_size,
             "language": "en",
-            "apiKey": NEWS_API_KEY,
+            "sortby": "publishedAt",
+            "apikey": GNEWS_API_KEY,
         },
         timeout=10,
     )
@@ -81,9 +88,11 @@ def format_articles(articles: list[dict]) -> list[dict]:
     for a in articles:
         title = a.get("title") or "No title"
         url = a.get("url") or ""
+        # GNews uses "source" as a dict with "name", same as NewsAPI
         source = (a.get("source") or {}).get("name", "Unknown")
         description = a.get("description") or ""
-        image = a.get("urlToImage") or ""
+        # GNews uses "image" instead of "urlToImage"
+        image = a.get("image") or a.get("urlToImage") or ""
         results.append({
             "title": title,
             "url": url,

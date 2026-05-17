@@ -75,7 +75,6 @@ def fetch_tech_news(page_size: int = 2) -> list[dict]:
             "language": "en",
             "category": "technology",
             "size": page_size,
-            "timeframe": 24,
         },
         timeout=10,
     )

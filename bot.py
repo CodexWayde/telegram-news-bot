@@ -11,8 +11,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
-GNEWS_API_KEY = "db4858b5de9bfdfa000f06505d34df10"
-GNEWS_API_URL = "https://gnews.io/api/v4"
+NEWSDATA_API_KEY = "pub_cb5486c8e6f94276890b1bb48c7e7e6a"
+NEWSDATA_API_URL = "https://newsdata.io/api/1"
 
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,52 +32,50 @@ def get_greeting() -> str:
         return "🌙 Good Night"
 
 
-# ── GNews helpers ─────────────────────────────────────────────────────────────
+# ── NewsData.io helpers ───────────────────────────────────────────────────────
 
-def fetch_top_headlines(page_size: int = 4) -> list[dict]:
+def fetch_top_headlines(page_size: int = 2) -> list[dict]:
     resp = requests.get(
-        f"{GNEWS_API_URL}/top-headlines",
+        f"{NEWSDATA_API_URL}/news",
         params={
+            "apikey": NEWSDATA_API_KEY,
             "language": "en",
-            "max": page_size,
-            "apikey": GNEWS_API_KEY,
+            "size": page_size,
         },
         timeout=10,
     )
     resp.raise_for_status()
-    return resp.json().get("articles", [])
+    return resp.json().get("results", [])
 
 
-def fetch_tech_news(page_size: int = 4) -> list[dict]:
+def fetch_tech_news(page_size: int = 2) -> list[dict]:
     resp = requests.get(
-        f"{GNEWS_API_URL}/search",
+        f"{NEWSDATA_API_URL}/news",
         params={
-            "q": "technology OR artificial intelligence OR startups OR crypto OR gadgets",
-            "max": page_size,
+            "apikey": NEWSDATA_API_KEY,
             "language": "en",
-            "sortby": "publishedAt",
-            "apikey": GNEWS_API_KEY,
+            "category": "technology",
+            "size": page_size,
         },
         timeout=10,
     )
     resp.raise_for_status()
-    return resp.json().get("articles", [])
+    return resp.json().get("results", [])
 
 
-def fetch_search(query: str, page_size: int = 5) -> list[dict]:
+def fetch_search(query: str, page_size: int = 3) -> list[dict]:
     resp = requests.get(
-        f"{GNEWS_API_URL}/search",
+        f"{NEWSDATA_API_URL}/news",
         params={
+            "apikey": NEWSDATA_API_KEY,
+            "language": "en",
             "q": query,
-            "max": page_size,
-            "language": "en",
-            "sortby": "publishedAt",
-            "apikey": GNEWS_API_KEY,
+            "size": page_size,
         },
         timeout=10,
     )
     resp.raise_for_status()
-    return resp.json().get("articles", [])
+    return resp.json().get("results", [])
 
 
 def format_articles(articles: list[dict]) -> list[dict]:
@@ -86,10 +84,10 @@ def format_articles(articles: list[dict]) -> list[dict]:
     results = []
     for a in articles:
         title = a.get("title") or "No title"
-        url = a.get("url") or ""
-        source = (a.get("source") or {}).get("name", "Unknown")
+        url = a.get("link") or ""
+        source = a.get("source_id") or "Unknown"
         description = a.get("description") or ""
-        image = a.get("image") or a.get("urlToImage") or ""
+        image = a.get("image_url") or ""
         results.append({
             "title": title,
             "url": url,
@@ -191,8 +189,8 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("📤 Posting news to The Global Nexus…")
     try:
-        global_articles = format_articles(fetch_top_headlines(4))
-        tech_articles = format_articles(fetch_tech_news(4))
+        global_articles = format_articles(fetch_top_headlines(2))
+        tech_articles = format_articles(fetch_tech_news(2))
         greeting = get_greeting()
         await ctx.bot.send_message(
             chat_id=CHAT_ID,
@@ -214,7 +212,7 @@ async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def scheduled_news(bot) -> None:
     try:
         global_articles = format_articles(fetch_top_headlines(2))
-        tech_articles = format_articles(fetch_tech_news(2))
+        tech_articles = format_articles(fetch_tech_news(3))
         greeting = get_greeting()
         await bot.send_message(
             chat_id=CHAT_ID,

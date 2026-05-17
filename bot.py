@@ -41,14 +41,13 @@ def fetch_top_headlines(page_size: int = 2) -> list[dict]:
             "apikey": NEWSDATA_API_KEY,
             "language": "en",
             "size": page_size,
+            "timeframe": 24,  # only last 24 hours
         },
         timeout=10,
     )
-    resp.raise_for_status()
-    return resp.json().get("results", [])
 
 
-def fetch_tech_news(page_size: int = 2) -> list[dict]:
+def fetch_tech_news(page_size: int = 3) -> list[dict]:
     resp = requests.get(
         f"{NEWSDATA_API_URL}/news",
         params={
@@ -56,12 +55,10 @@ def fetch_tech_news(page_size: int = 2) -> list[dict]:
             "language": "en",
             "category": "technology",
             "size": page_size,
+            "timeframe": 24,  # only last 24 hours
         },
         timeout=10,
     )
-    resp.raise_for_status()
-    return resp.json().get("results", [])
-
 
 def fetch_search(query: str, page_size: int = 3) -> list[dict]:
     resp = requests.get(

@@ -213,8 +213,8 @@ async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def scheduled_news(bot) -> None:
     try:
-        global_articles = format_articles(fetch_top_headlines(4))
-        tech_articles = format_articles(fetch_tech_news(4))
+        global_articles = format_articles(fetch_top_headlines(2))
+        tech_articles = format_articles(fetch_tech_news(2))
         greeting = get_greeting()
         await bot.send_message(
             chat_id=CHAT_ID,

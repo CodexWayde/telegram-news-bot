@@ -95,10 +95,15 @@ def format_articles(articles: list[dict]) -> list[dict]:
 
 async def send_articles(bot, chat_id, articles: list[dict]) -> None:
     for a in articles:
+        title = a['title'].replace('*', '').replace('_', '').replace('[', '').replace(']', '')
+        description = a['description'].replace('*', '').replace('_', '').replace('[', '').replace(']', '')
+        source = a['source']
+        url = a['url']
+
         caption = (
-            f"📰 *{a['title']}*\n"
-            f"_{a['description']}_\n\n"
-            f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})\n\n"
+            f"📰 *{title}*\n"
+            f"{description}\n\n"
+            f"🗞 {source}  |  🔗 [Read more]({url})\n\n"
             f"━━━━━━━━━━━━━━━━\n"
             f"📡 *THE GLOBAL NEXUS* — Your World. Your Tech."
         )

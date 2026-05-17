@@ -11,8 +11,14 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 # ── Config ────────────────────────────────────────────────────────────────────
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
-NEWSDATA_API_KEY = "pub_cb5486c8e6f94276890b1bb48c7e7e6a"
-NEWSDATA_API_URL = "https://newsdata.io/api/1"
+
+# NewsAPI — for global top headlines
+NEWSAPI_KEY = "9edda91377f94916bd601b4685c5a346"
+NEWSAPI_URL = "https://newsapi.org/v2"
+
+# NewsData.io — for tech news
+NEWSDATA_KEY = "pub_cb5486c8e6f94276890b1bb48c7e7e6a"
+NEWSDATA_URL = "https://newsdata.io/api/1"
 
 logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -32,91 +38,125 @@ def get_greeting() -> str:
         return "🌙 Good Night"
 
 
-# ── NewsData.io helpers ───────────────────────────────────────────────────────
+# ── News fetchers ─────────────────────────────────────────────────────────────
 
 def fetch_top_headlines(page_size: int = 2) -> list[dict]:
+    """Fetch global headlines using NewsAPI."""
     resp = requests.get(
-        f"{NEWSDATA_API_URL}/news",
+        f"{NEWSAPI_URL}/top-headlines",
         params={
-            "apikey": NEWSDATA_API_KEY,
+            "apiKey": NEWSAPI_KEY,
             "language": "en",
-            "size": page_size,
+            "pageSize": page_size,
         },
         timeout=10,
     )
+    resp.raise_for_status()
+    articles = resp.json().get("articles", [])
+    return [
+        {
+            "title": a.get("title") or "No title",
+            "url": a.get("url") or "",
+            "source": (a.get("source") or {}).get("name", "Unknown"),
+            "description": a.get("description") or "",
+            "image": a.get("urlToImage") or "",
+        }
+        for a in articles
+    ]
 
 
-def fetch_tech_news(page_size: int = 3) -> list[dict]:
+def fetch_tech_news(page_size: int = 2) -> list[dict]:
+    """Fetch tech news using NewsData.io."""
     resp = requests.get(
-        f"{NEWSDATA_API_URL}/news",
+        f"{NEWSDATA_URL}/news",
         params={
-            "apikey": NEWSDATA_API_KEY,
+            "apikey": NEWSDATA_KEY,
             "language": "en",
             "category": "technology",
             "size": page_size,
         },
         timeout=10,
     )
+    resp.raise_for_status()
+    articles = resp.json().get("results", [])
+    return [
+        {
+            "title": a.get("title") or "No title",
+            "url": a.get("link") or "",
+            "source": a.get("source_id") or "Unknown",
+            "description": a.get("description") or "",
+            "image": a.get("image_url") or "",
+        }
+        for a in articles
+    ]
+
 
 def fetch_search(query: str, page_size: int = 3) -> list[dict]:
+    """Search news using NewsAPI."""
     resp = requests.get(
-        f"{NEWSDATA_API_URL}/news",
+        f"{NEWSAPI_URL}/everything",
         params={
-            "apikey": NEWSDATA_API_KEY,
+            "apiKey": NEWSAPI_KEY,
             "language": "en",
             "q": query,
-            "size": page_size,
+            "pageSize": page_size,
+            "sortBy": "publishedAt",
         },
         timeout=10,
     )
     resp.raise_for_status()
-    return resp.json().get("results", [])
+    articles = resp.json().get("articles", [])
+    return [
+        {
+            "title": a.get("title") or "No title",
+            "url": a.get("url") or "",
+            "source": (a.get("source") or {}).get("name", "Unknown"),
+            "description": a.get("description") or "",
+            "image": a.get("urlToImage") or "",
+        }
+        for a in articles
+    ]
 
 
-def format_articles(articles: list[dict]) -> list[dict]:
-    if not articles:
-        return []
-    results = []
-    for a in articles:
-        title = a.get("title") or "No title"
-        url = a.get("link") or ""
-        source = a.get("source_id") or "Unknown"
-        description = a.get("description") or ""
-        image = a.get("image_url") or ""
-        results.append({
-            "title": title,
-            "url": url,
-            "source": source,
-            "description": description,
-            "image": image,
-        })
-    return results
-
+# ── Article sender ────────────────────────────────────────────────────────────
 
 async def send_articles(bot, chat_id, articles: list[dict]) -> None:
     for a in articles:
-        caption = (
-            f"📰 {a['title']}\n\n"
-            f"{a['description']}\n\n"
-            f"🗞 {a['source']}\n"
-            f"🔗 {a['url']}\n\n"
+        # Strip special markdown chars to avoid parse errors
+        title = a['title'].replace('*', '').replace('_', '').replace('[', '').replace(']', '')
+        description = a['description'].replace('*', '').replace('_', '').replace('[', '').replace(']', '')
+        text = (
+            f"📰 *{title}*\n"
+            f"{description}\n\n"
+            f"🗞 {a['source']}  |  🔗 [Read more]({a['url']})\n\n"
             f"━━━━━━━━━━━━━━━━\n"
-            f"📡 THE GLOBAL NEXUS — Your World. Your Tech."
+            f"📡 *THE GLOBAL NEXUS* — Your World. Your Tech."
         )
         try:
             if a["image"]:
                 await bot.send_photo(
                     chat_id=chat_id,
                     photo=a["image"],
-                    caption=caption,
+                    caption=text,
+                    parse_mode="Markdown",
                 )
             else:
                 await bot.send_message(
                     chat_id=chat_id,
-                    text=caption,
+                    text=text,
+                    parse_mode="Markdown",
+                    disable_web_page_preview=False,
                 )
         except Exception as e:
-            logger.error(f"Error sending article: {e}")
+            logger.error(f"Error sending article '{a['title']}': {e}")
+            # Try sending as plain text if markdown fails
+            try:
+                await bot.send_message(
+                    chat_id=chat_id,
+                    text=f"📰 {a['title']}\n\n{a['description']}\n\n🔗 {a['url']}",
+                )
+            except Exception as e2:
+                logger.error(f"Plain text fallback also failed: {e2}")
             continue
 
 
@@ -139,7 +179,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_news(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("⏳ Fetching top global headlines…")
     try:
-        articles = format_articles(fetch_top_headlines())
+        articles = fetch_top_headlines()
         if not articles:
             await update.message.reply_text("😕 No articles found.")
             return
@@ -152,7 +192,7 @@ async def cmd_news(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_tech(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("💻 Fetching latest tech news…")
     try:
-        articles = format_articles(fetch_tech_news())
+        articles = fetch_tech_news()
         if not articles:
             await update.message.reply_text("😕 No tech articles found.")
             return
@@ -169,7 +209,7 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     query = " ".join(ctx.args)
     await update.message.reply_text(f"🔍 Searching for *{query}*…", parse_mode="Markdown")
     try:
-        articles = format_articles(fetch_search(query))
+        articles = fetch_search(query)
         if not articles:
             await update.message.reply_text("😕 No articles found.")
             return
@@ -182,8 +222,8 @@ async def cmd_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("📤 Posting news to The Global Nexus…")
     try:
-        global_articles = format_articles(fetch_top_headlines(2))
-        tech_articles = format_articles(fetch_tech_news(3))
+        global_articles = fetch_top_headlines(2)
+        tech_articles = fetch_tech_news(4)
         logger.info(f"Fetched {len(global_articles)} global and {len(tech_articles)} tech articles")
         greeting = get_greeting()
         await ctx.bot.send_message(
@@ -205,8 +245,8 @@ async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def scheduled_news(bot) -> None:
     try:
-        global_articles = format_articles(fetch_top_headlines(2))
-        tech_articles = format_articles(fetch_tech_news(3))
+        global_articles = fetch_top_headlines(2)
+        tech_articles = fetch_tech_news(4)
         logger.info(f"Fetched {len(global_articles)} global and {len(tech_articles)} tech articles")
         greeting = get_greeting()
         await bot.send_message(

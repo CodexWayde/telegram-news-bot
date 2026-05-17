@@ -95,17 +95,13 @@ def format_articles(articles: list[dict]) -> list[dict]:
 
 async def send_articles(bot, chat_id, articles: list[dict]) -> None:
     for a in articles:
-        title = a['title'].replace('*', '').replace('_', '').replace('[', '').replace(']', '')
-        description = a['description'].replace('*', '').replace('_', '').replace('[', '').replace(']', '')
-        source = a['source']
-        url = a['url']
-
         caption = (
-            f"📰 *{title}*\n"
-            f"{description}\n\n"
-            f"🗞 {source}  |  🔗 [Read more]({url})\n\n"
+            f"📰 {a['title']}\n\n"
+            f"{a['description']}\n\n"
+            f"🗞 {a['source']}\n"
+            f"🔗 {a['url']}\n\n"
             f"━━━━━━━━━━━━━━━━\n"
-            f"📡 *THE GLOBAL NEXUS* — Your World. Your Tech."
+            f"📡 THE GLOBAL NEXUS — Your World. Your Tech."
         )
         try:
             if a["image"]:
@@ -113,14 +109,11 @@ async def send_articles(bot, chat_id, articles: list[dict]) -> None:
                     chat_id=chat_id,
                     photo=a["image"],
                     caption=caption,
-                    parse_mode="Markdown",
                 )
             else:
                 await bot.send_message(
                     chat_id=chat_id,
                     text=caption,
-                    parse_mode="Markdown",
-                    disable_web_page_preview=False,
                 )
         except Exception as e:
             logger.error(f"Error sending article: {e}")
@@ -190,7 +183,8 @@ async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("📤 Posting news to The Global Nexus…")
     try:
         global_articles = format_articles(fetch_top_headlines(2))
-        tech_articles = format_articles(fetch_tech_news(2))
+        tech_articles = format_articles(fetch_tech_news(3))
+        logger.info(f"Fetched {len(global_articles)} global and {len(tech_articles)} tech articles")
         greeting = get_greeting()
         await ctx.bot.send_message(
             chat_id=CHAT_ID,
@@ -213,6 +207,7 @@ async def scheduled_news(bot) -> None:
     try:
         global_articles = format_articles(fetch_top_headlines(2))
         tech_articles = format_articles(fetch_tech_news(3))
+        logger.info(f"Fetched {len(global_articles)} global and {len(tech_articles)} tech articles")
         greeting = get_greeting()
         await bot.send_message(
             chat_id=CHAT_ID,

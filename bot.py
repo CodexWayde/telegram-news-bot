@@ -12,7 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 BOT_TOKEN = os.environ["BOT_TOKEN"]
 CHAT_ID = os.environ["CHAT_ID"]
 
-# NewsAPI — for global top headlines
+# NewsAPI — for global top headlines and search
 NEWSAPI_KEY = "9edda91377f94916bd601b4685c5a346"
 NEWSAPI_URL = "https://newsapi.org/v2"
 
@@ -41,8 +41,7 @@ def get_greeting() -> str:
 # ── News fetchers ─────────────────────────────────────────────────────────────
 
 def fetch_top_headlines(page_size: int = 2) -> list[dict]:
-    from datetime import timedelta
-    yesterday = (datetime.now(pytz.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    """Fetch global headlines using NewsAPI."""
     resp = requests.get(
         f"{NEWSAPI_URL}/top-headlines",
         params={
@@ -52,10 +51,23 @@ def fetch_top_headlines(page_size: int = 2) -> list[dict]:
         },
         timeout=10,
     )
+    resp.raise_for_status()
+    articles = resp.json().get("articles", [])
+    return [
+        {
+            "title": a.get("title") or "No title",
+            "url": a.get("url") or "",
+            "source": (a.get("source") or {}).get("name", "Unknown"),
+            "description": a.get("description") or "",
+            "image": a.get("urlToImage") or "",
+        }
+        for a in articles
+        if a.get("title") and "[Removed]" not in a.get("title", "")
+    ]
 
 
 def fetch_tech_news(page_size: int = 2) -> list[dict]:
-    """Fetch tech news using NewsData.io."""
+    """Fetch recent tech news using NewsData.io."""
     resp = requests.get(
         f"{NEWSDATA_URL}/news",
         params={
@@ -78,7 +90,9 @@ def fetch_tech_news(page_size: int = 2) -> list[dict]:
             "image": a.get("image_url") or "",
         }
         for a in articles
+        if a.get("title")
     ]
+
 
 def fetch_search(query: str, page_size: int = 3) -> list[dict]:
     """Search news using NewsAPI."""
@@ -104,14 +118,27 @@ def fetch_search(query: str, page_size: int = 3) -> list[dict]:
             "image": a.get("urlToImage") or "",
         }
         for a in articles
+        if a.get("title") and "[Removed]" not in a.get("title", "")
     ]
+
+
+# ── Deduplication ─────────────────────────────────────────────────────────────
+
+def deduplicate(articles: list[dict]) -> list[dict]:
+    """Remove duplicate articles based on URL."""
+    seen = set()
+    unique = []
+    for a in articles:
+        if a["url"] and a["url"] not in seen:
+            seen.add(a["url"])
+            unique.append(a)
+    return unique
 
 
 # ── Article sender ────────────────────────────────────────────────────────────
 
 async def send_articles(bot, chat_id, articles: list[dict]) -> None:
     for a in articles:
-        # Strip special markdown chars to avoid parse errors
         title = a['title'].replace('*', '').replace('_', '').replace('[', '').replace(']', '')
         description = a['description'].replace('*', '').replace('_', '').replace('[', '').replace(']', '')
         text = (
@@ -138,7 +165,6 @@ async def send_articles(bot, chat_id, articles: list[dict]) -> None:
                 )
         except Exception as e:
             logger.error(f"Error sending article '{a['title']}': {e}")
-            # Try sending as plain text if markdown fails
             try:
                 await bot.send_message(
                     chat_id=chat_id,
@@ -160,7 +186,7 @@ async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
         "/tech — latest tech news\n"
         "/search <keyword> — search any topic\n"
         "/postnews — post news to the group\n\n"
-        "📅 News drops automatically at 6AM, 12PM, 6PM & 10PM (UTC).",
+        "📅 News drops automatically at 7AM, 1PM, 7PM & 11PM (Nigerian time).",
         parse_mode="Markdown",
     )
 
@@ -213,7 +239,8 @@ async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         global_articles = fetch_top_headlines(2)
         tech_articles = fetch_tech_news(4)
-        logger.info(f"Fetched {len(global_articles)} global and {len(tech_articles)} tech articles")
+        all_articles = deduplicate(global_articles + tech_articles)
+        logger.info(f"Fetched {len(global_articles)} global and {len(tech_articles)} tech articles ({len(all_articles)} after dedup)")
         greeting = get_greeting()
         await ctx.bot.send_message(
             chat_id=CHAT_ID,
@@ -225,7 +252,7 @@ async def cmd_postnews(update: Update, ctx: ContextTypes.DEFAULT_TYPE) -> None:
             ),
             parse_mode="Markdown",
         )
-        await send_articles(ctx.bot, CHAT_ID, global_articles + tech_articles)
+        await send_articles(ctx.bot, CHAT_ID, all_articles)
         await update.message.reply_text("✅ News posted to The Global Nexus successfully!")
     except Exception as e:
         logger.error(f"Error posting news: {e}")
@@ -236,7 +263,8 @@ async def scheduled_news(bot) -> None:
     try:
         global_articles = fetch_top_headlines(2)
         tech_articles = fetch_tech_news(4)
-        logger.info(f"Fetched {len(global_articles)} global and {len(tech_articles)} tech articles")
+        all_articles = deduplicate(global_articles + tech_articles)
+        logger.info(f"Fetched {len(global_articles)} global and {len(tech_articles)} tech articles ({len(all_articles)} after dedup)")
         greeting = get_greeting()
         await bot.send_message(
             chat_id=CHAT_ID,
@@ -248,7 +276,7 @@ async def scheduled_news(bot) -> None:
             ),
             parse_mode="Markdown",
         )
-        await send_articles(bot, CHAT_ID, global_articles + tech_articles)
+        await send_articles(bot, CHAT_ID, all_articles)
         logger.info("Scheduled news posted successfully!")
     except Exception as e:
         logger.error(f"Scheduled news error: {e}")

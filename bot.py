@@ -41,7 +41,8 @@ def get_greeting() -> str:
 # ── News fetchers ─────────────────────────────────────────────────────────────
 
 def fetch_top_headlines(page_size: int = 2) -> list[dict]:
-    """Fetch global headlines using NewsAPI."""
+    from datetime import timedelta
+    yesterday = (datetime.now(pytz.utc) - timedelta(hours=24)).strftime("%Y-%m-%dT%H:%M:%SZ")
     resp = requests.get(
         f"{NEWSAPI_URL}/top-headlines",
         params={
@@ -51,18 +52,6 @@ def fetch_top_headlines(page_size: int = 2) -> list[dict]:
         },
         timeout=10,
     )
-    resp.raise_for_status()
-    articles = resp.json().get("articles", [])
-    return [
-        {
-            "title": a.get("title") or "No title",
-            "url": a.get("url") or "",
-            "source": (a.get("source") or {}).get("name", "Unknown"),
-            "description": a.get("description") or "",
-            "image": a.get("urlToImage") or "",
-        }
-        for a in articles
-    ]
 
 
 def fetch_tech_news(page_size: int = 2) -> list[dict]:
@@ -74,6 +63,7 @@ def fetch_tech_news(page_size: int = 2) -> list[dict]:
             "language": "en",
             "category": "technology",
             "size": page_size,
+            "timeframe": 24,
         },
         timeout=10,
     )
@@ -89,7 +79,6 @@ def fetch_tech_news(page_size: int = 2) -> list[dict]:
         }
         for a in articles
     ]
-
 
 def fetch_search(query: str, page_size: int = 3) -> list[dict]:
     """Search news using NewsAPI."""

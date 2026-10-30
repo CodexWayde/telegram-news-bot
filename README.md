@@ -1,6 +1,6 @@
 # The Global Nexus: Telegram News Bot
 
-> An automated Telegram bot that gathers news from multiple sources and posts it four times a day, running 24/7.
+> A Telegram bot that gathers news from several sources and posts it automatically four times a day.
 
 Built with **Python · Telegram Bot API · NewsAPI · NewsData.io · Railway**
 
@@ -10,9 +10,9 @@ Built with **Python · Telegram Bot API · NewsAPI · NewsData.io · Railway**
 
 - Collects news from several sources (NewsAPI and NewsData.io)
 - Posts automatically on a fixed schedule, four times a day
-- Works in groups and serves **1,000+ users**
+- Works in Telegram group chats
 - Handles errors so one failed fetch doesn't stop the bot
-- Runs continuously on Railway
+- Deployed on Railway
 
 ## Posting schedule
 
@@ -59,11 +59,10 @@ Never put keys directly in the code. Set them as environment variables:
 
 | Variable | What it is |
 |---|---|
-| `TELEGRAM_TOKEN` | Bot token from @BotFather |
+| `BOT_TOKEN` | Bot token from @BotFather |
+| `CHAT_ID` | The Telegram chat or channel to post to |
 | `NEWSAPI_KEY` | Your NewsAPI key |
 | `NEWSDATA_KEY` | Your NewsData.io key |
-
-> Use the variable names your code actually reads.
 
 ### 3. Run locally
 
@@ -76,13 +75,13 @@ python main.py
 1. Push the project to GitHub
 2. Create a new Railway project from the repo
 3. Add the environment variables above in Railway's settings
-4. Deploy. The bot runs continuously
+4. Deploy
 
 ---
 
 ## Author
 
-**Isaac Desmond** · AI Automation & Full-Stack Developer
+**Isaac Desmond** · AI Automation & Full-Stack Developer in training
 
 - Portfolio: [codexwayde.github.io/portfolio](https://codexwayde.github.io/portfolio)
 - GitHub: [@CodexWayde](https://github.com/CodexWayde)
